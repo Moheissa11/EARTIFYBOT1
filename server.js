@@ -2,8 +2,7 @@
  * EARTIFY — lightweight Node server.
  * NOTES FOR HANDOFF:
  * 1) The browser talks only to /api/* routes; secrets stay in this file/.env.
- * 2) AI mode is optional. Without OPENAI_API_KEY, the app returns a clearly
- *    labelled starter analysis so the UI remains demoable.
+ * 2) Cero chat supports Gemini or OpenAI. Provider keys stay server-side in .env.
  * 3) Research links are primary-source starting points, not a substitute for
  *    checking the exact evidence behind a mission decision.
  */
@@ -369,7 +368,7 @@ const requestHandler = async (req,res) => {
     try { if (new URL(req.headers.origin).host !== req.headers.host) return send(res,403,{error:"Cross-origin requests are not allowed."}); }
     catch { return send(res,403,{error:"Invalid request origin."}); }
   }
-  if (url.pathname === "/api/health") return send(res,200,{ok:true,aiEnabled:!!process.env.OPENAI_API_KEY,semanticSearchEnabled:!!process.env.OPENAI_API_KEY,documentFormats:["TXT","MD","CSV","JSON","XML","HTML","PDF","DOCX"],researchProviders:["NASA NTRS","Crossref","arXiv"]});
+  if (url.pathname === "/api/health") return send(res,200,{ok:true,aiEnabled:!!(process.env.GEMINI_API_KEY||process.env.OPENAI_API_KEY),aiProvider:process.env.GEMINI_API_KEY?"gemini":process.env.OPENAI_API_KEY?"openai":"guided",semanticSearchEnabled:!!process.env.OPENAI_API_KEY,documentFormats:["TXT","MD","CSV","JSON","XML","HTML","PDF","DOCX"],researchProviders:["NASA NTRS","Crossref","arXiv"]});
 
   if (url.pathname === "/api/auth/signup" && req.method === "POST") {
     try { const x=await readBody(req), email=String(x.email||"").trim().toLowerCase(), name=String(x.name||"").trim().slice(0,60), password=String(x.password||"");
@@ -446,10 +445,11 @@ const requestHandler = async (req,res) => {
       if(!message) return send(res,400,{error:"Type a message first."});
       const signedIn=currentUser(req);
       if(looksLikeUnclearInput(message)) return send(res,200,{reply:robotReply(message),mode:"clarify"});
-      if(!process.env.OPENAI_API_KEY) {
+      const aiProvider=process.env.GEMINI_API_KEY?"gemini":process.env.OPENAI_API_KEY?"openai":"guided";
+      if(aiProvider==="guided") {
         const reply=robotReply(message);
         if(signedIn){appendUserConversation(signedIn.id,"user",message);appendUserConversation(signedIn.id,"assistant",reply);saveDB();}
-        return send(res,200,{reply,mode:"guided",notice:"For open-ended conversational answers, configure OPENAI_API_KEY on the server."});
+        return send(res,200,{reply,mode:"guided",notice:"For open-ended conversational answers, configure GEMINI_API_KEY or OPENAI_API_KEY on the server."});
       }
       const evidence=await searchContextForChat(message);
       const clientHistory=Array.isArray(input.history) ? input.history.slice(-8).map(item=>({role:item.role==="assistant"?"assistant":"user",content:String(item.content||"").slice(0,1200)})) : [];
@@ -486,11 +486,23 @@ STYLE: Be patient, encouraging, accurate, and specific. Never shame mistakes. Do
         researchResults.items.length ? `Scientific records retrieved live from NASA NTRS, Crossref, and/or arXiv: ${JSON.stringify(researchResults.items)}` : "No live scientific records were retrieved for this turn.",
         docContext ? `Relevant passages from this signed-in user's saved documents:\n${docContext}` : "No relevant passages were retrieved from the user's saved documents."
       ].join("\n\n");
-      const response=await fetch("https://api.openai.com/v1/chat/completions",{method:"POST",headers:{"Authorization":`Bearer ${process.env.OPENAI_API_KEY}`,"Content-Type":"application/json"},body:JSON.stringify({model:process.env.OPENAI_MODEL||"gpt-4o-mini",messages:[{role:"system",content:systemPrompt},{role:"system",content:context},...history,{role:"user",content:message}],temperature:.25}),signal:AbortSignal.timeout(60000)});
-      if(!response.ok) throw new Error("The AI service is temporarily unavailable. Check the server API key and try again."); const data=await response.json();
-      const reply=data.choices?.[0]?.message?.content||(messageLanguage(message)==="ar" ? "معلش، حصلت مشكلة في فهم السؤال. ممكن تعيده بصياغة تانية؟" : "Sorry, I had trouble understanding that. Could you rephrase your question?");
+      let reply="";
+      if(aiProvider==="gemini") {
+        const model=process.env.GEMINI_MODEL||"gemini-3.8-flash";
+        const contents=[...history.map(item=>({role:item.role==="assistant"?"model":"user",parts:[{text:item.content}]})),{role:"user",parts:[{text:`${context}\n\nUser message: ${message}`}]}];
+        const response=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,{method:"POST",headers:{"x-goog-api-key":process.env.GEMINI_API_KEY,"Content-Type":"application/json"},body:JSON.stringify({systemInstruction:{parts:[{text:systemPrompt}]},contents,generationConfig:{temperature:.25,maxOutputTokens:1800}}),signal:AbortSignal.timeout(60000)});
+        const data=await response.json().catch(()=>({}));
+        if(!response.ok) { const detail=data.error?.message||`Gemini API returned ${response.status}`; throw new Error(`Gemini: ${detail}`); }
+        reply=(data.candidates?.[0]?.content?.parts||[]).map(part=>part.text||"").join("\n").trim();
+      } else {
+        const response=await fetch("https://api.openai.com/v1/chat/completions",{method:"POST",headers:{"Authorization":`Bearer ${process.env.OPENAI_API_KEY}`,"Content-Type":"application/json"},body:JSON.stringify({model:process.env.OPENAI_MODEL||"gpt-4o-mini",messages:[{role:"system",content:systemPrompt},{role:"system",content:context},...history,{role:"user",content:message}],temperature:.25}),signal:AbortSignal.timeout(60000)});
+        const data=await response.json().catch(()=>({}));
+        if(!response.ok) throw new Error(data.error?.message||`OpenAI API returned ${response.status}`);
+        reply=data.choices?.[0]?.message?.content||"";
+      }
+      if(!reply) reply=messageLanguage(message)==="ar" ? "معلش، النموذج مرجعش إجابة واضحة. جرّب تسألني تاني." : "Sorry, the model did not return a usable answer. Please try again.";
       if(signedIn){appendUserConversation(signedIn.id,"user",message);appendUserConversation(signedIn.id,"assistant",reply);saveDB();}
-      return send(res,200,{reply,mode:"ai",reference:evidence?.found?{name:evidence.title,url:evidence.url}:null,research:researchResults.items,researchProviders:researchResults.providers});
+      return send(res,200,{reply,mode:"ai",provider:aiProvider,reference:evidence?.found?{name:evidence.title,url:evidence.url}:null,research:researchResults.items,researchProviders:researchResults.providers});
     } catch(e){return send(res,502,{error:e.message||"Chat failed"});}
   }
   if (url.pathname === "/api/research/search" && req.method === "GET") {
@@ -523,6 +535,9 @@ STYLE: Be patient, encouraging, accurate, and specific. Never shame mistakes. Do
     } catch(e) { return send(res,502,{error:e.message}); }
   }
   let pathname = decodeURIComponent(url.pathname === "/" ? "/index.html" : url.pathname);
+  // Serve directory routes (e.g. /solar/ or /solar) with their index.html.
+  if (pathname.endsWith("/")) pathname += "index.html";
+  else if (!path.extname(pathname)) pathname += "/index.html";
   const target = path.normalize(path.join(PUBLIC, pathname));
   if (!target.startsWith(PUBLIC)) return send(res,403,{error:"Forbidden"});
   fs.readFile(target,(err,buffer)=>{

@@ -62,3 +62,21 @@ The existing EARTIFY 3D explorer, visual assets, account interface, research lib
 - Set `OPENAI_API_KEY` in a local `.env` file for full AI chat and semantic embeddings.
 - Install Poppler, Tesseract (`eng` and `ara` language data), and Python 3 for document extraction.
 - Do not share or commit `.env`.
+
+
+## Realistic Moon update
+
+- Added `public/assets/moon-realistic-map.png`, a 2:1 equirectangular lunar surface texture derived from a generated high-detail lunar reference.
+- Updated the solar-system scene to load this local Moon map for the Moon sphere, so the main Moon uses detailed craters and lunar maria without depending on a remote texture host.
+- Existing Moon surface-exploration backdrop and other planet textures are unchanged.
+
+## Realistic Solar System texture update
+
+- Added local high-resolution equirectangular surface maps for Mercury, Venus, Mars, Jupiter, Saturn, Uranus, Neptune, and the Sun under `public/assets/planet-textures/`.
+- Updated the 3D scene to load these local maps first, avoiding reliance on a remote texture host for the main planetary surfaces.
+- The Sun now uses its local photosphere map as both surface and emissive texture for a brighter, more solar appearance.
+- Added a subtle Uranian ring system while preserving Saturn's existing ring model.
+- Kept the existing realistic Earth and Moon maps unchanged.
+- Mirrored the updated scene module in both `public/solar/src/` and `solar/src/` to keep the project's duplicate solar entry points consistent.
+
+Note: These are detailed visual/educational maps created for this EARTIFY build, not official scientific cartography or photogrammetric datasets.

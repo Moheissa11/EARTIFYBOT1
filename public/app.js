@@ -164,7 +164,7 @@ async function initHeroEarth(){
   const loader=new THREE.TextureLoader();
   const [earthTexture,moonTexture]=await Promise.all([
    loader.loadAsync("/assets/earth-blue-marble.png"),
-   loader.loadAsync("/assets/moon-closeup.png")
+   loader.loadAsync("/assets/moon-realistic-map.png")
   ]);
   [earthTexture,moonTexture].forEach(t=>{t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=renderer.capabilities.getMaxAnisotropy();t.needsUpdate=true;});
   earthTexture.wrapS=THREE.RepeatWrapping;earthTexture.wrapT=THREE.ClampToEdgeWrapping;

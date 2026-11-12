@@ -4,16 +4,16 @@ EARTIFY keeps its existing browser-based 3D explorer and adds a server-side Cero
 
 ## Start locally
 
-1. Install **Node.js 20+** (Node 20 or 22 recommended).
+1. Install **Node.js 18+** (Node 20 or 22 recommended).
 2. Install PDF/OCR system tools:
    - **Windows:** install Poppler for Windows (make `pdftotext.exe` and `pdftoppm.exe` available on `PATH`) and Tesseract OCR with English and Arabic language packs. Install Python 3 for DOCX parsing.
    - **macOS:** `brew install poppler tesseract tesseract-lang python`.
    - **Ubuntu/Debian:** `sudo apt install poppler-utils tesseract-ocr tesseract-ocr-eng tesseract-ocr-ara python3`.
-3. Copy `.env.example` to `.env` and set `OPENAI_API_KEY` to enable full conversational AI and semantic retrieval. Keep the key private on the server.
+3. Copy `.env.example` to `.env` and set `GEMINI_API_KEY` from Google AI Studio to enable Cero with Gemini. `GEMINI_MODEL` defaults to `gemini-3.8-flash`. Alternatively, set `OPENAI_API_KEY` to use OpenAI. Gemini is preferred if both keys are present. Keep all keys private in the server-side `.env` file.
 4. On Windows, double-click `START-EARTIFY.bat`. On macOS/Linux, run `./START-EARTIFY.sh`. Or run `npm start`.
 5. Open `http://localhost:3000`.
 
-Without `OPENAI_API_KEY`, the site and basic/offline guided responses remain available, but Cero is not a full general-purpose AI. Semantic embeddings are only used when the key is configured; embedding requests may incur API usage charges.
+Without either AI key, the site and basic/offline guided responses remain available, but Cero is not a full general-purpose AI. OpenAI semantic embeddings are enabled only when `OPENAI_API_KEY` is configured.
 
 ## Current capabilities
 
@@ -46,13 +46,15 @@ Without `OPENAI_API_KEY`, the site and basic/offline guided responses remain ava
 
 `.env` options:
 
-- `OPENAI_API_KEY` — required for open-ended AI conversation and embeddings.
-- `OPENAI_MODEL` — chat model; defaults to `gpt-4o-mini`.
+- `GEMINI_API_KEY` — enables Gemini-powered Cero chat (preferred when configured). Create a key in Google AI Studio.
+- `GEMINI_MODEL` — Gemini model name; defaults to `gemini-3.8-flash`.
+- `OPENAI_API_KEY` — optional OpenAI chat fallback and semantic embeddings.
+- `OPENAI_MODEL` — OpenAI fallback chat model; defaults to `gpt-4o-mini`.
 - `OPENAI_EMBEDDING_MODEL` — defaults to `text-embedding-3-small`.
 - `NASA_API_KEY` — retained as a configuration placeholder for NASA APIs that require a key; current NTRS search is public and does not use it.
 - `PORT` — defaults to `3000`.
 
-Never put secrets in `public/`, commit `.env`, or share your API key in screenshots or chat.
+Never put secrets in `public/`, commit `.env`, or share your API key in screenshots or chat. The server calls Gemini; the browser never receives the key.
 
 ## API routes
 
